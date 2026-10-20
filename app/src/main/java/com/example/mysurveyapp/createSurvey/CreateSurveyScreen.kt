@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,7 +32,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.mysurveyapp.components.DateTimePickerButton
 import com.example.mysurveyapp.components.DropdownField
+import com.example.mysurveyapp.network.CreateAssessmentRequest
+import com.example.mysurveyapp.network.RetrofitInstance
 import com.example.mysurveyapp.ui.theme.MySurveyAppTheme
+import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDateTime
 
 
@@ -221,6 +226,36 @@ fun CreateSurveyScreen() {
                                 modifier = Modifier.weight(1f)
                             )
                         }
+                        val testScope = rememberCoroutineScope()
+                        var testResult by remember { mutableStateOf("") }
+
+                        Button(onClick = {
+                            testScope.launch {
+                                testResult = "Sender..."
+                                testResult = try {
+                                    val request = CreateAssessmentRequest(
+                                        assessmentName = "Test fra appen",
+                                        startDate = Instant.now().plusSeconds(3600).toString(),
+                                        endDate = Instant.now().plusSeconds(7200).toString(),
+                                        applicationName = "CRM",
+                                        roleNames = listOf("IT-medarbejder"),
+                                        regionIds = listOf("14829808-54e7-45d1-90c1-6e2b3aa2d007"),
+                                        experiences = listOf(0)
+                                    )
+                                    val response = RetrofitInstance.api.createAssessment(request)
+                                    if (response.isSuccessful) {
+                                        "Det virkede! Kode ${response.code()}"
+                                    } else {
+                                        "Fejl ${response.code()}: ${response.errorBody()?.string()}"
+                                    }
+                                } catch (e: Exception) {
+                                    "Kunne ikke nå serveren: ${e.message}"
+                                }
+                            }
+                        }) {
+                            Text("Test API")
+                        }
+                        Text(testResult)
 
                         // 10. Opret-knap
                         Button(
