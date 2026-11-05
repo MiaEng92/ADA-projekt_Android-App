@@ -27,7 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.mysurveyapp.assesmentCard.AssessmentSummaryCard
+import com.example.mysurveyapp.assessmentCard.AssessmentSummaryCard
 import com.example.mysurveyapp.network.AssessmentSummaryDto
 import com.example.mysurveyapp.network.RetrofitInstance
 import com.example.mysurveyapp.ui.theme.AdaBackground

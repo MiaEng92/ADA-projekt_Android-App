@@ -1,13 +1,12 @@
 package com.example.mysurveyapp
 
-import android.R
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.mysurveyapp.assesmentCard.AssessmentDetailsScreen
+import com.example.mysurveyapp.assessmentCard.AssessmentDetailsScreen
 import com.example.mysurveyapp.createSurvey.CreateSurveyScreen
 import com.example.mysurveyapp.frontpage.Frontpage
 import com.example.mysurveyapp.login.CreateLoginPage

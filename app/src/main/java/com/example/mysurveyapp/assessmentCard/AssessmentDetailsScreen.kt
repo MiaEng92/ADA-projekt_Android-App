@@ -1,4 +1,4 @@
-package com.example.mysurveyapp.assesmentCard
+package com.example.mysurveyapp.assessmentCard
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement

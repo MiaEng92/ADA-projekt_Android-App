@@ -10,6 +10,11 @@ import retrofit2.http.Query
 
 interface AdaApiService {
 
+    // Log ind. Svaret indeholder tokenet (se extractToken i Auth.kt)
+    @POST("api/auth/login")
+    suspend fun login(@Body request: LoginRequest): ResponseBody
+
+    //opret måling
     @POST("api/assessments")
     suspend fun createAssessment(
         @Body request: CreateAssessmentRequest
