@@ -13,10 +13,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -25,37 +27,150 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.mysurveyapp.components.DateTimePickerButton
 import com.example.mysurveyapp.components.DropdownField
+import com.example.mysurveyapp.components.EmailListInput
 import com.example.mysurveyapp.network.CreateAssessmentRequest
+import com.example.mysurveyapp.network.ExperienceDto
+import com.example.mysurveyapp.network.RegionDto
 import com.example.mysurveyapp.network.RetrofitInstance
+import com.example.mysurveyapp.network.experienceLabel
+import com.example.mysurveyapp.network.inNaturalOrder
+import com.example.mysurveyapp.network.surveyOptions
+import com.example.mysurveyapp.network.tilApiTid
+import com.example.mysurveyapp.ui.theme.AdaBackground
+import com.example.mysurveyapp.ui.theme.AdaText
 import com.example.mysurveyapp.ui.theme.MySurveyAppTheme
 import kotlinx.coroutines.launch
-import java.time.Instant
 import java.time.LocalDateTime
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateSurveyScreen() {
+fun CreateSurveyScreen(
+    // Kaldes, når målingen er oprettet. Navigation.kt kan bruge den til at åbne listen.
+    onCreated: () -> Unit = {}
+) {
 
     // Her gemmer vi teksten fra inputfelterne
     var assessmentName by remember { mutableStateOf("") }
     var applicationName by remember { mutableStateOf("") }
+    var roleInput by remember { mutableStateOf("") }            // det, brugeren skriver lige nu
+    val roles = remember { mutableStateListOf<String>() }       // listen med gemte roller
     var role by remember { mutableStateOf("") }
     var region by remember { mutableStateOf("") }
     var experience by remember { mutableStateOf("") }
     var survey by remember { mutableStateOf("") }
     var startTime by remember { mutableStateOf<LocalDateTime?>(null) }
     var endTime by remember { mutableStateOf<LocalDateTime?>(null) }
+    var respondentEmails by remember { mutableStateOf(listOf<String>()) }
+
+    // Lister, der hentes fra backend'en
+    var regions by remember { mutableStateOf<List<RegionDto>>(emptyList()) }
+    var experiences by remember { mutableStateOf<List<ExperienceDto>>(emptyList()) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+
+    // Sending af målingen
+    var isSending by remember { mutableStateOf(false) }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
+    var statusIsError by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val inPreview = LocalInspectionMode.current
+
+    // Henter regioner og erfaring, når skærmen åbner
+    LaunchedEffect(Unit) {
+        if (inPreview) return@LaunchedEffect
+        try {
+            regions = RetrofitInstance.api.getRegions().sortedBy { it.regionName }
+            experiences = RetrofitInstance.api.getExperiences().inNaturalOrder()
+            loadError = null
+        } catch (e: Exception) {
+            loadError = "Kunne ikke hente regioner og erfaring. Tjek, at serveren kører."
+        }
+    }
+
+    // Kan målingen oprettes? Alt skal være udfyldt, og slutdatoen skal ligge efter startdatoen.
+    val start = startTime
+    val end = endTime
+    val canCreate = assessmentName.isNotBlank() &&
+            applicationName.isNotBlank() &&
+            role.isNotBlank() &&
+            region.isNotBlank() &&
+            experience.isNotBlank() &&
+            survey.isNotBlank() &&
+            respondentEmails.isNotEmpty() &&
+            start != null &&
+            end != null &&
+            end.isAfter(start) &&
+            !isSending
+
+    // Sender målingen til API'et
+    fun createAssessment() {
+        // Slår de valgte navne op og finder deres id'er
+        val regionId = regions.firstOrNull { it.regionName == region }?.regionId
+        val experienceId = experiences
+            .firstOrNull { experienceLabel(it.experienceValue) == experience }?.experienceId
+        val surveyId = surveyOptions.firstOrNull { it.first == survey }?.second
+
+        if (start == null || end == null || regionId == null || experienceId == null || surveyId == null) {
+            statusMessage = "Noget mangler, eller listerne er ikke hentet endnu."
+            statusIsError = true
+            return
+        }
+
+        scope.launch {
+            isSending = true
+            statusMessage = null
+            try {
+                val request = CreateAssessmentRequest(
+                    assessmentName = assessmentName.trim(),
+                    startDate = start.tilApiTid(),
+                    endDate = end.tilApiTid(),
+                    applicationName = applicationName.trim(),
+                    surveyId = surveyId,
+                    // Den valgte rolle. Skal målgruppen have ALLE de roller, du har tilføjet,
+                    // så skriv roles.toList() i stedet for listOf(role).
+                    roleNames = listOf(role),
+                    regionIds = listOf(regionId),
+                    experienceIds = listOf(experienceId),
+                    respondentEmails = respondentEmails
+                )
+                val response = RetrofitInstance.api.createAssessment(request)
+                if (response.isSuccessful) {
+                    statusMessage = "Målingen er oprettet."
+                    statusIsError = false
+
+                    // Tømmer felterne efter oprettelse
+                    assessmentName = ""
+                    applicationName = ""
+                    role = ""
+                    region = ""
+                    experience = ""
+                    survey = ""
+                    startTime = null
+                    endTime = null
+                    respondentEmails = emptyList()
+
+                    onCreated()
+                } else {
+                    statusMessage = "Fejl ${response.code()}: ${response.errorBody()?.string()}"
+                    statusIsError = true
+                }
+            } catch (e: Exception) {
+                statusMessage = "Kunne ikke nå serveren: ${e.message}"
+                statusIsError = true
+            }
+            isSending = false
+        }
+    }
 
     Scaffold(
-        containerColor = Color(0xFFF7F9FC)
+        containerColor = AdaBackground
     ) { innerPadding ->
 
         LazyColumn(
@@ -72,7 +187,7 @@ fun CreateSurveyScreen() {
                     text = "Opret ADA-måling",
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1E293B),
+                    color = AdaText,
                     modifier = Modifier.padding(
                         top = 40.dp,
                         bottom = 24.dp
@@ -121,10 +236,6 @@ fun CreateSurveyScreen() {
 
 
                         // 5. Roller
-                        var roleInput by remember { mutableStateOf("") }            // det, brugeren skriver lige nu
-                        val roles =
-                            remember { mutableStateListOf<String>() }                      // listen med gemte roller
-
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -140,18 +251,16 @@ fun CreateSurveyScreen() {
 
                             Button(
                                 onClick = {
-                                    val new =
-                                        roleInput.trim()                    // fjerner mellemrum i enderne
+                                    val new = roleInput.trim()                     // fjerner mellemrum i enderne
                                     if (new.isNotBlank() && new !in roles) {       // ikke tom, og ikke allerede i listen
                                         roles.add(new)
-                                        roleInput = ""                           // tøm feltet
+                                        roleInput = ""                             // tøm feltet
                                     }
                                 }
                             ) {
                                 Text("Tilføj")
                             }
                         }
-                        // Dropdown kommer her
                         DropdownField(
                             label = "Vælg rolle",
                             choiceOptions = roles,
@@ -160,53 +269,34 @@ fun CreateSurveyScreen() {
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        // 6. Region
-                        val regionOptions = listOf(
-                            "United Kingdom East",
-                            "Continental Europe",
-                            "United Kingdom West",
-                            "Americas",
-                            "Asia Pacific",
-                            "Middle East",
-                            "Africa",
-                            "Nordics",
-                            "Central Europe",
-                            "Southern Europe"
-                        )
-                        // Dropdown kommer her
+                        // 6. Region (hentes fra backend'en)
                         DropdownField(
                             label = "Vælg region",
-                            choiceOptions = regionOptions,
+                            choiceOptions = regions.map { it.regionName },
                             chosen = region,
                             onChoice = { region = it },
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        // 7. Erfaring
-                        // Dropdown kommer her
+                        // 7. Erfaring (hentes fra backend'en, og koden vises som dansk tekst)
                         DropdownField(
                             label = "Vælg erfaring",
-                            choiceOptions = listOf("under 1 år", "1-2 år", "3-5 år", " over 5 år"),
+                            choiceOptions = experiences.map { experienceLabel(it.experienceValue) },
                             chosen = experience,
                             onChoice = { experience = it },
                             modifier = Modifier.fillMaxWidth()
                         )
 
-
                         // 8. Survey
-                        // Dropdown kommer her
                         DropdownField(
                             label = "Vælg survey",
-                            choiceOptions = listOf("ADA-survey"),
+                            choiceOptions = surveyOptions.map { it.first },
                             chosen = survey,
                             onChoice = { survey = it },
                             modifier = Modifier.fillMaxWidth()
                         )
 
-
                         // 9. Start- og slutdato
-
-
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -226,82 +316,42 @@ fun CreateSurveyScreen() {
                                 modifier = Modifier.weight(1f)
                             )
                         }
-                        val testScope = rememberCoroutineScope()
-                        var testResult by remember { mutableStateOf("") }
 
-                        Button(onClick = {
-                            testScope.launch {
-                                testResult = "Sender..."
-                                testResult = try {
-                                    val request = CreateAssessmentRequest(
-                                        assessmentName = "Test fra appen",
-                                        startDate = Instant.now().plusSeconds(3600).toString(),
-                                        endDate = Instant.now().plusSeconds(7200).toString(),
-                                        applicationName = "CRM",
-                                        roleNames = listOf("IT-medarbejder"),
-                                        regionIds = listOf("14829808-54e7-45d1-90c1-6e2b3aa2d007"),
-                                        experiences = listOf(0)
-                                    )
-                                    val response = RetrofitInstance.api.createAssessment(request)
-                                    if (response.isSuccessful) {
-                                        "Det virkede! Kode ${response.code()}"
-                                    } else {
-                                        "Fejl ${response.code()}: ${response.errorBody()?.string()}"
-                                    }
-                                } catch (e: Exception) {
-                                    "Kunne ikke nå serveren: ${e.message}"
-                                }
-                            }
-                        }) {
-                            Text("Test API")
+                        // 10. Respondenternes e-mailadresser
+                        Text(
+                            text = "Respondenter",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        EmailListInput(
+                            emails = respondentEmails,
+                            onEmailsChange = { respondentEmails = it },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Fejl og status
+                        loadError?.let {
+                            Text(it, color = MaterialTheme.colorScheme.error)
                         }
-                        Text(testResult)
+                        statusMessage?.let {
+                            Text(
+                                text = it,
+                                color = if (statusIsError) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.primary
+                            )
+                        }
 
-                        // 10. Opret-knap
+                        // 11. Opret-knap
                         Button(
-                            onClick = {
-                                //opretter en ny måling
-                                val newAssessment = Assessment(
-                                    name = assessmentName,
-                                    application = applicationName,
-                                    role = role,
-                                    region = region,
-                                    experience = experience,
-                                    survey = survey,
-                                    start = startTime,
-                                    end = endTime
-                                )
-
-                                // tilføjer måling til listen
-                                AssessmentStorage.assessments.add(newAssessment)
-
-                                //Tømmer felterne efter oprettelse
-                                assessmentName = ""
-                                applicationName = ""
-                                role = ""
-                                region = ""
-                                experience = ""
-                                survey = ""
-                                startTime = null
-                                endTime = null
-
-                            },
-                            enabled = assessmentName.isNotBlank() &&
-                            applicationName.isNotBlank() &&
-                            role.isNotBlank() &&
-                            region.isNotBlank() &&
-                            experience.isNotBlank() &&
-                            survey.isNotBlank() &&
-                            startTime != null &&
-                            endTime != null &&
-                            endTime!!.isAfter(startTime),
+                            onClick = { createAssessment() },
+                            enabled = canCreate,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(56.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
-                                text = "Opret måling",
+                                text = if (isSending) "Opretter..." else "Opret måling",
                                 fontSize = 16.sp
                             )
                         }
