@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,7 +41,11 @@ import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 
 @Composable
-fun CreateLoginPage(onLoginClick: () -> Unit) {
+fun CreateLoginPage(
+    onLoginClick: () -> Unit,
+    // Åbner skærmen, hvor en medarbejder skriver sin kode fra invitationen
+    onRespondentClick: () -> Unit = {}
+) {
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -161,6 +166,14 @@ fun CreateLoginPage(onLoginClick: () -> Unit) {
                         )
                     }
                 }
+            }
+
+            // 6. Medarbejdere skal ikke logge ind. De bruger koden fra deres invitation.
+            TextButton(
+                onClick = onRespondentClick,
+                modifier = Modifier.padding(top = 16.dp)
+            ) {
+                Text("Jeg har fået en invitation til en survey")
             }
         }
     }

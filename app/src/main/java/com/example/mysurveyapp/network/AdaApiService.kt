@@ -28,6 +28,10 @@ interface AdaApiService {
     @GET("api/assessments/{id}/details")
     suspend fun getDetails(@Path("id") id: String): AssessmentDetailsDto
 
+    // Sender en medarbejders svar. Backend'en svarer 204 (ingen indhold), når det lykkes.
+    @POST("api/respondents/survey/submit")
+    suspend fun submitSurvey(@Body request: SubmitSurveyRequest): Response<ResponseBody>
+
     // Surveyen, som en medarbejder besvarer. Koden (token) står i invitationen.
     @GET("api/respondents/survey")
     suspend fun getSurvey(@Query("token") token: String): SurveyDto

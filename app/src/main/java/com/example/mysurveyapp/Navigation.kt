@@ -1,5 +1,6 @@
 package com.example.mysurveyapp
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -10,8 +11,10 @@ import com.example.mysurveyapp.assessmentCard.AssessmentDetailsScreen
 import com.example.mysurveyapp.createSurvey.CreateSurveyScreen
 import com.example.mysurveyapp.frontpage.Frontpage
 import com.example.mysurveyapp.login.CreateLoginPage
-import com.example.mysurveyapp.survey.SurveyScreen
+import com.example.mysurveyapp.surveyDescription.SurveyScreen
 import com.example.mysurveyapp.assessmentScreen.AssessmentsScreen
+import com.example.mysurveyapp.respondents.EnterTokenScreen
+import com.example.mysurveyapp.respondents.RespondentSurveyScreen
 
 
 @Composable
@@ -28,6 +31,9 @@ fun AppNavigation() {
             CreateLoginPage(
                 onLoginClick = {
                     navController.navigate("welcome")
+                },
+                onRespondentClick = {
+                    navController.navigate("respondent")
                 }
             )
         }
@@ -71,6 +77,30 @@ fun AppNavigation() {
                 onBackClick = { navController.popBackStack() }
             )
         }
+
+        // Medarbejderens survey: først koden, så selve besvarelsen
+        composable("respondent") {
+            EnterTokenScreen(
+                onStart = { token ->
+                    // Uri.encode, så specialtegn i koden ikke ødelægger adressen
+                    navController.navigate("respondent_survey/${Uri.encode(token)}")
+                },
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = "respondent_survey/{token}",
+            arguments = listOf(navArgument("token") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val token = backStackEntry.arguments?.getString("token") ?: ""
+            RespondentSurveyScreen(
+                token = token,
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+
 
     }
 }
