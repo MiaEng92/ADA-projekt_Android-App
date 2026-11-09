@@ -7,19 +7,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +53,8 @@ import com.example.mysurveyapp.ui.theme.MySurveyAppTheme
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 
+// Formularen er delt i tre trin, så hvert trin passer på en skærm
+private val stepTitles = listOf("Om målingen", "Målgruppe", "Tid og respondenter")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +62,8 @@ fun CreateSurveyScreen(
     // Kaldes, når målingen er oprettet. Navigation.kt kan bruge den til at åbne listen.
     onCreated: () -> Unit = {}
 ) {
+    //Hvilket trin er vi på
+    var step by remember { mutableIntStateOf(0) }
 
     // Her gemmer vi teksten fra inputfelterne
     var assessmentName by remember { mutableStateOf("") }
@@ -90,24 +98,22 @@ fun CreateSurveyScreen(
             experiences = RetrofitInstance.api.getExperiences().inNaturalOrder()
             loadError = null
         } catch (e: Exception) {
-            loadError = "Kunne ikke hente regioner og erfaring. Tjek, at serveren kører."
+            loadError = "Kunne ikke hente regioner og erfaring. Tjek, at serveren kører: ${e.message}"
         }
     }
 
-    // Kan målingen oprettes? Alt skal være udfyldt, og slutdatoen skal ligge efter startdatoen.
+    // Er det aktuelle trin udfyldt? Så kan man gå videre.
     val start = startTime
     val end = endTime
-    val canCreate = assessmentName.isNotBlank() &&
-            applicationName.isNotBlank() &&
-            role.isNotBlank() &&
-            region.isNotBlank() &&
-            experience.isNotBlank() &&
-            survey.isNotBlank() &&
-            respondentEmails.isNotEmpty() &&
-            start != null &&
-            end != null &&
-            end.isAfter(start) &&
-            !isSending
+    val step1Done = assessmentName.isNotBlank() && applicationName.isNotBlank() && survey.isNotBlank()
+    val step2Done = role.isNotBlank() && region.isNotBlank() && experience.isNotBlank()
+    val step3Done = respondentEmails.isNotEmpty() && start != null && end != null && end.isAfter(start)
+    val canContinue = when (step) {
+        0 -> step1Done
+        1 -> step2Done
+        else -> step3Done && !isSending
+    }
+    val isLastStep = step == stepTitles.lastIndex
 
     // Sender målingen til API'et
     fun createAssessment() {
@@ -145,7 +151,7 @@ fun CreateSurveyScreen(
                     statusMessage = "Målingen er oprettet."
                     statusIsError = false
 
-                    // Tømmer felterne efter oprettelse
+                    // Tømmer felterne og går tilbage til første trin
                     assessmentName = ""
                     applicationName = ""
                     role = ""
@@ -155,6 +161,7 @@ fun CreateSurveyScreen(
                     startTime = null
                     endTime = null
                     respondentEmails = emptyList()
+                    step = 0
 
                     onCreated()
                 } else {
@@ -173,196 +180,227 @@ fun CreateSurveyScreen(
         containerColor = AdaBackground
     ) { innerPadding ->
 
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 24.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
-            // 1. Overskrift
-            item {
-                Text(
-                    text = "Opret ADA-måling",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = AdaText,
-                    modifier = Modifier.padding(
-                        top = 40.dp,
-                        bottom = 24.dp
-                    )
-                )
-            }
-            // 2. Kort med formularen
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    elevation = CardDefaults.cardElevation(
-                        defaultElevation = 4.dp
-                    )
+            // Overskrift
+            Text(
+                text = "Opret ADA-måling",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = AdaText,
+                modifier = Modifier.padding(top = 32.dp, bottom = 16.dp)
+            )
+
+            // Hvor langt er jeg?
+            Text(
+                text = "Trin ${step + 1} af ${stepTitles.size} · ${stepTitles[step]}",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            )
+            LinearProgressIndicator(
+                progress = { (step + 1).toFloat() / stepTitles.size },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            )
+
+            // Kort med det aktuelle trin
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-
-                        // 3. Målings navn
-                        OutlinedTextField(
-                            value = assessmentName, //Teksten der vises i feltet
-                            onValueChange = {
-                                assessmentName = it
-                            }, //Håndterer hvad der sker når brugeren skriver noget.
-                            label = {
-                                Text("Målingens navn")
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true //Bruger kan kun skrive på en linje
-                        )
-
-                        // 4. Applikation
-                        OutlinedTextField(
-                            value = applicationName,
-                            onValueChange = {
-                                applicationName = it
-                            },
-                            label = {
-                                Text("Applikations navn")
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-
-                        // 5. Roller
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                    when (step) {
+                        0 -> {
+                            // Trin 1: Om målingen
                             OutlinedTextField(
-                                value = roleInput,
-                                onValueChange = { roleInput = it },
-                                label = { Text("Skriv en rolle") },
-                                modifier = Modifier.weight(1f),
+                                value = assessmentName,
+                                onValueChange = { assessmentName = it },
+                                label = { Text("Målingens navn") },
+                                modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
+                            OutlinedTextField(
+                                value = applicationName,
+                                onValueChange = { applicationName = it },
+                                label = { Text("Applikationens navn") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            DropdownField(
+                                label = "Vælg survey",
+                                choiceOptions = surveyOptions.map { it.first },
+                                chosen = survey,
+                                onChoice = { survey = it },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
 
-                            Button(
-                                onClick = {
-                                    val new = roleInput.trim()                     // fjerner mellemrum i enderne
-                                    if (new.isNotBlank() && new !in roles) {       // ikke tom, og ikke allerede i listen
-                                        roles.add(new)
-                                        roleInput = ""                             // tøm feltet
-                                    }
-                                }
+                        1 -> {
+                            // Trin 2: Målgruppe
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Tilføj")
+                                OutlinedTextField(
+                                    value = roleInput,
+                                    onValueChange = { roleInput = it },
+                                    label = { Text("Skriv en rolle") },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true
+                                )
+                                Button(
+                                    onClick = {
+                                        val new = roleInput.trim()                  // fjerner mellemrum i enderne
+                                        if (new.isNotBlank() && new !in roles) {    // ikke tom, og ikke allerede i listen
+                                            roles.add(new)
+                                            roleInput = ""                          // tøm feltet
+                                        }
+                                    }
+                                ) {
+                                    Text("Tilføj")
+                                }
+                            }
+                            DropdownField(
+                                label = "Vælg rolle",
+                                choiceOptions = roles,
+                                chosen = role,
+                                onChoice = { role = it },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            DropdownField(
+                                label = "Vælg region",
+                                choiceOptions = regions.map { it.regionName },
+                                chosen = region,
+                                onChoice = { region = it },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            DropdownField(
+                                label = "Vælg erfaring",
+                                choiceOptions = experiences.map { experienceLabel(it.experienceValue) },
+                                chosen = experience,
+                                onChoice = { experience = it },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            loadError?.let {
+                                Text(it, color = MaterialTheme.colorScheme.error)
                             }
                         }
-                        DropdownField(
-                            label = "Vælg rolle",
-                            choiceOptions = roles,
-                            chosen = role,
-                            onChoice = { role = it },
-                            modifier = Modifier.fillMaxWidth()
-                        )
 
-                        // 6. Region (hentes fra backend'en)
-                        DropdownField(
-                            label = "Vælg region",
-                            choiceOptions = regions.map { it.regionName },
-                            chosen = region,
-                            onChoice = { region = it },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        else -> {
+                            // Trin 3: Tid og respondenter
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                DateTimePickerButton(
+                                    label = "Startdato",
+                                    value = startTime,
+                                    onValueChange = { startTime = it },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                DateTimePickerButton(
+                                    label = "Slutdato",
+                                    value = endTime,
+                                    onValueChange = { endTime = it },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
 
-                        // 7. Erfaring (hentes fra backend'en, og koden vises som dansk tekst)
-                        DropdownField(
-                            label = "Vælg erfaring",
-                            choiceOptions = experiences.map { experienceLabel(it.experienceValue) },
-                            chosen = experience,
-                            onChoice = { experience = it },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                            // En måling kan først åbnes af respondenterne, når startdatoen er nået
+                            if (start != null && start.isAfter(LocalDateTime.now())) {
+                                Text(
+                                    text = "Målingen åbner først på startdatoen. Før da kan respondenterne ikke åbne surveyen.",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (start != null && end != null && !end.isAfter(start)) {
+                                Text(
+                                    text = "Slutdatoen skal ligge efter startdatoen.",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
 
-                        // 8. Survey
-                        DropdownField(
-                            label = "Vælg survey",
-                            choiceOptions = surveyOptions.map { it.first },
-                            chosen = survey,
-                            onChoice = { survey = it },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        // 9. Start- og slutdato
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-
-                            DateTimePickerButton(
-                                label = "Startdato",
-                                value = startTime,
-                                onValueChange = { startTime = it },
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            DateTimePickerButton(
-                                label = "Slutdato",
-                                value = endTime,
-                                onValueChange = { endTime = it },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        // 10. Respondenternes e-mailadresser
-                        Text(
-                            text = "Respondenter",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        EmailListInput(
-                            emails = respondentEmails,
-                            onEmailsChange = { respondentEmails = it },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        // Fejl og status
-                        loadError?.let {
-                            Text(it, color = MaterialTheme.colorScheme.error)
-                        }
-                        statusMessage?.let {
                             Text(
-                                text = it,
-                                color = if (statusIsError) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.primary
+                                text = "Respondenter",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            EmailListInput(
+                                emails = respondentEmails,
+                                onEmailsChange = { respondentEmails = it },
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
-
-                        // 11. Opret-knap
-                        Button(
-                            onClick = { createAssessment() },
-                            enabled = canCreate,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                text = if (isSending) "Opretter..." else "Opret måling",
-                                fontSize = 16.sp
-                            )
-                        }
-
                     }
-
-
                 }
-
             }
 
+            // Status efter afsendelse
+            statusMessage?.let {
+                Text(
+                    text = it,
+                    color = if (statusIsError) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                )
+            }
+
+            // Knapper: Tilbage og Næste (på sidste trin: Opret måling)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (step > 0) {
+                    OutlinedButton(
+                        onClick = { step -= 1 },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Tilbage", fontSize = 16.sp)
+                    }
+                }
+                Button(
+                    onClick = { if (isLastStep) createAssessment() else step += 1 },
+                    enabled = canContinue,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = when {
+                            isSending -> "Opretter..."
+                            isLastStep -> "Opret måling"
+                            else -> "Næste"
+                        },
+                        fontSize = 16.sp
+                    )
+                }
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-package com.example.mysurveyapp.survey
+package com.example.mysurveyapp.surveyDescription
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
