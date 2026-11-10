@@ -13,7 +13,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -39,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.example.mysurveyapp.components.DateTimePickerButton
 import com.example.mysurveyapp.components.DropdownField
 import com.example.mysurveyapp.components.EmailListInput
+import com.example.mysurveyapp.components.MultiSelectDropdownField
 import com.example.mysurveyapp.network.CreateAssessmentRequest
 import com.example.mysurveyapp.network.ExperienceDto
 import com.example.mysurveyapp.network.RegionDto
@@ -56,24 +56,24 @@ import java.time.LocalDateTime
 // Formularen er delt i tre trin, så hvert trin passer på en skærm
 private val stepTitles = listOf("Om målingen", "Målgruppe", "Tid og respondenter")
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateSurveyScreen(
     // Kaldes, når målingen er oprettet. Navigation.kt kan bruge den til at åbne listen.
     onCreated: () -> Unit = {}
 ) {
-    //Hvilket trin er vi på
+
+    // Hvilket trin er vi på? 0, 1 eller 2
     var step by remember { mutableIntStateOf(0) }
 
-    // Her gemmer vi teksten fra inputfelterne
+    // Her gemmer vi teksten fra inputfelterne (de ligger her, så de bevares, når man går frem og tilbage)
     var assessmentName by remember { mutableStateOf("") }
     var applicationName by remember { mutableStateOf("") }
+    var survey by remember { mutableStateOf("") }
     var roleInput by remember { mutableStateOf("") }            // det, brugeren skriver lige nu
     val roles = remember { mutableStateListOf<String>() }       // listen med gemte roller
-    var role by remember { mutableStateOf("") }
-    var region by remember { mutableStateOf("") }
-    var experience by remember { mutableStateOf("") }
-    var survey by remember { mutableStateOf("") }
+    var selectedRoles by remember { mutableStateOf(setOf<String>()) }         // de roller, produktejeren har afkrydset
+    var selectedRegions by remember { mutableStateOf(setOf<String>()) }       // de regioner, produktejeren har valgt
+    var selectedExperiences by remember { mutableStateOf(setOf<String>()) }   // de erfaringer, produktejeren har valgt
     var startTime by remember { mutableStateOf<LocalDateTime?>(null) }
     var endTime by remember { mutableStateOf<LocalDateTime?>(null) }
     var respondentEmails by remember { mutableStateOf(listOf<String>()) }
@@ -98,15 +98,15 @@ fun CreateSurveyScreen(
             experiences = RetrofitInstance.api.getExperiences().inNaturalOrder()
             loadError = null
         } catch (e: Exception) {
-            loadError = "Kunne ikke hente regioner og erfaring. Tjek, at serveren kører: ${e.message}"
+            loadError = "Kunne ikke hente regioner og erfaring: ${e.message}"
         }
     }
 
-    // Er det aktuelle trin udfyldt? Så kan man gå videre.
+    // Er det aktuelle trin udfyldt? Så må man gå videre.
     val start = startTime
     val end = endTime
     val step1Done = assessmentName.isNotBlank() && applicationName.isNotBlank() && survey.isNotBlank()
-    val step2Done = role.isNotBlank() && region.isNotBlank() && experience.isNotBlank()
+    val step2Done = roles.any { it in selectedRoles } && selectedRegions.isNotEmpty() && selectedExperiences.isNotEmpty()
     val step3Done = respondentEmails.isNotEmpty() && start != null && end != null && end.isAfter(start)
     val canContinue = when (step) {
         0 -> step1Done
@@ -118,12 +118,15 @@ fun CreateSurveyScreen(
     // Sender målingen til API'et
     fun createAssessment() {
         // Slår de valgte navne op og finder deres id'er
-        val regionId = regions.firstOrNull { it.regionName == region }?.regionId
-        val experienceId = experiences
-            .firstOrNull { experienceLabel(it.experienceValue) == experience }?.experienceId
+        val roleNames = roles.filter { it in selectedRoles }
+        val regionIds = regions.filter { it.regionName in selectedRegions }.map { it.regionId }
+        val experienceIds = experiences
+            .filter { experienceLabel(it.experienceValue) in selectedExperiences }.map { it.experienceId }
         val surveyId = surveyOptions.firstOrNull { it.first == survey }?.second
 
-        if (start == null || end == null || regionId == null || experienceId == null || surveyId == null) {
+        if (start == null || end == null || roleNames.isEmpty() || regionIds.isEmpty() ||
+            experienceIds.isEmpty() || surveyId == null
+        ) {
             statusMessage = "Noget mangler, eller listerne er ikke hentet endnu."
             statusIsError = true
             return
@@ -139,11 +142,11 @@ fun CreateSurveyScreen(
                     endDate = end.tilApiTid(),
                     applicationName = applicationName.trim(),
                     surveyId = surveyId,
-                    // Den valgte rolle. Skal målgruppen have ALLE de roller, du har tilføjet,
-                    // så skriv roles.toList() i stedet for listOf(role).
-                    roleNames = listOf(role),
-                    regionIds = listOf(regionId),
-                    experienceIds = listOf(experienceId),
+                    // Alle de roller, regioner og erfaringer, produktejeren har valgt.
+                    // Det er dem, respondenterne selv kan vælge imellem.
+                    roleNames = roleNames,
+                    regionIds = regionIds,
+                    experienceIds = experienceIds,
                     respondentEmails = respondentEmails
                 )
                 val response = RetrofitInstance.api.createAssessment(request)
@@ -154,10 +157,11 @@ fun CreateSurveyScreen(
                     // Tømmer felterne og går tilbage til første trin
                     assessmentName = ""
                     applicationName = ""
-                    role = ""
-                    region = ""
-                    experience = ""
                     survey = ""
+                    roles.clear()
+                    selectedRoles = emptySet()
+                    selectedRegions = emptySet()
+                    selectedExperiences = emptySet()
                     startTime = null
                     endTime = null
                     respondentEmails = emptyList()
@@ -176,9 +180,7 @@ fun CreateSurveyScreen(
         }
     }
 
-    Scaffold(
-        containerColor = AdaBackground
-    ) { innerPadding ->
+    Scaffold(containerColor = AdaBackground) { innerPadding ->
 
         Column(
             modifier = Modifier
@@ -251,7 +253,14 @@ fun CreateSurveyScreen(
                         }
 
                         1 -> {
-                            // Trin 2: Målgruppe
+                            // Trin 2: Målgruppe. Det, du vælger her, er det, respondenterne selv kan vælge imellem.
+                            Text(
+                                text = "Respondenterne vælger selv blandt det, du vælger her. Vælg mindst ét af hver.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            // Roller: skriv dem ind én ad gangen, og afkryds dem, der skal med
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -269,6 +278,7 @@ fun CreateSurveyScreen(
                                         val new = roleInput.trim()                  // fjerner mellemrum i enderne
                                         if (new.isNotBlank() && new !in roles) {    // ikke tom, og ikke allerede i listen
                                             roles.add(new)
+                                            selectedRoles = selectedRoles + new     // en ny rolle er afkrydset fra start
                                             roleInput = ""                          // tøm feltet
                                         }
                                     }
@@ -276,25 +286,27 @@ fun CreateSurveyScreen(
                                     Text("Tilføj")
                                 }
                             }
-                            DropdownField(
-                                label = "Vælg rolle",
+                            MultiSelectDropdownField(
+                                label = "Vælg roller",
                                 choiceOptions = roles,
-                                chosen = role,
-                                onChoice = { role = it },
+                                chosen = selectedRoles,
+                                onChosenChange = { selectedRoles = it },
                                 modifier = Modifier.fillMaxWidth()
                             )
-                            DropdownField(
-                                label = "Vælg region",
+
+                            // Regioner og erfaring: afkryds så mange, du vil (hentes fra backend'en)
+                            MultiSelectDropdownField(
+                                label = "Vælg regioner",
                                 choiceOptions = regions.map { it.regionName },
-                                chosen = region,
-                                onChoice = { region = it },
+                                chosen = selectedRegions,
+                                onChosenChange = { selectedRegions = it },
                                 modifier = Modifier.fillMaxWidth()
                             )
-                            DropdownField(
-                                label = "Vælg erfaring",
+                            MultiSelectDropdownField(
+                                label = "Vælg erfaringer",
                                 choiceOptions = experiences.map { experienceLabel(it.experienceValue) },
-                                chosen = experience,
-                                onChoice = { experience = it },
+                                chosen = selectedExperiences,
+                                onChosenChange = { selectedExperiences = it },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             loadError?.let {
@@ -411,5 +423,4 @@ fun CreateSurveyPreview() {
     MySurveyAppTheme {
         CreateSurveyScreen()
     }
-
 }

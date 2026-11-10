@@ -11,6 +11,7 @@ object RetrofitInstance {
     // true = test-serveren i PyCharm (port 8001)
     // false = det rigtige backend (port 5142)
     const val USE_MOCK = false
+
     private const val MOCK_URL = "http://10.0.2.2:8001/"
     private const val REAL_URL = "http://10.0.2.2:5142/"
     // Her vælges IP-adressen når appen starter
