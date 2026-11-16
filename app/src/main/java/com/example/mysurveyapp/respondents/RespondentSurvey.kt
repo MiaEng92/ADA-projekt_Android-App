@@ -1,5 +1,6 @@
 package com.example.mysurveyapp.respondents
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -70,6 +71,7 @@ data class SurveySubmission(
 
 // Sender svaret. Giver null, hvis det lykkedes, ellers en tekst, der kan vises for brugeren.
 private suspend fun sendToServer(token: String, submission: SurveySubmission): String? {
+    Log.e("Survey", "token: $token, submission: $submission")
     return try {
         val request = SubmitSurveyRequest(
             token = token,
@@ -87,6 +89,7 @@ private suspend fun sendToServer(token: String, submission: SurveySubmission): S
             errorTextFrom(body, response.code())
         }
     } catch (e: Exception) {
+        Log.e("Survey", "Error: ${e.message}")
         "Kunne ikke nå serveren: ${e.message}"
     }
 }
@@ -250,6 +253,7 @@ fun SurveyContent(
     onSubmit: suspend (SurveySubmission) -> String?,
     onExit: () -> Unit
 ) {
+    Log.e("Survey", "Survey data: $survey")
     val themes = survey.themes
     val roles = survey.roles.orEmpty()
     val regions = survey.regions.orEmpty()
@@ -340,14 +344,14 @@ fun SurveyContent(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            if (!hasChoices) {
-                Text(
-                    text = "Serveren sender ikke dine valgmuligheder (rolle, region og erfaring) endnu. " +
-                            "Du kan se surveyen, men ikke sende dit svar.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
+//            if (!hasChoices) {
+//                Text(
+//                    text = "Serveren sender ikke dine valgmuligheder (rolle, region og erfaring) endnu. " +
+//                            "Du kan se surveyen, men ikke sende dit svar.",
+//                    fontSize = 12.sp,
+//                    color = MaterialTheme.colorScheme.error
+//                )
+//            }
 
             if (theme == null) {
                 // Side 0: Om dig
@@ -450,6 +454,9 @@ fun SurveyContent(
                             step += 1
                         } else {
                             scope.launch {
+                                Log.d("Survey","Role: $roleId")
+                                Log.d("Survey","Role: $regionId")
+                                Log.d("Survey","Role: $experienceId")
                                 val chosenRole = roleId ?: return@launch
                                 val chosenRegion = regionId ?: return@launch
                                 val chosenExperience = experienceId ?: return@launch

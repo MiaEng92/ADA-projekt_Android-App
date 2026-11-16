@@ -172,6 +172,11 @@ fun AssessmentDetailsContent(details: AssessmentDetailsDto) {
             )
         }
     }
+
+    // Scoren pr. region, erfaring og så videre (varmekort)
+    SectionCard("Pr. gruppe") {
+        BreakdownContent(assessmentId = details.assessmentId, answerCount = details.respondedCount)
+    }
 }
 
 @Composable

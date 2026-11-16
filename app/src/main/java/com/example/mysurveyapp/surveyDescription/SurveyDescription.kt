@@ -56,9 +56,9 @@ fun SurveyScreen(
 
 ) {
     val surveyThemes = listOf(
-        "Usability" to "Hvor let og intuitivt systemet er",
-        "Self-efficacy" to "Brugerens tro på egen evne til at bruge systemet",
-        "Enjoyment" to "Om det opleves positivt eller frustrerende at bruge",
+        "Usability" to "Hvor let og intuitivt systemet er.",
+        "Self-efficacy" to "Brugerens tro på egen evne til at bruge systemet.",
+        "Enjoyment" to "Om det opleves positivt eller frustrerende at bruge.",
         "Confirmation" to "Om systemet lever op til forventningerne.",
         "Organizational Support" to " Om der er hjælp, træning og opbakning omkring brugen.",
         "Job-Fit" to "Om systemet passer til de opgaver, brugeren har.",
