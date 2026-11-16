@@ -27,6 +27,9 @@ interface AdaApiService {
     // Detaljer for én måling: status, hvornår svarene kom ind og tema-scores
     @GET("api/assessments/{id}/details")
     suspend fun getDetails(@Path("id") id: String): AssessmentDetailsDto
+    // Scoren pr. gruppe og tema. by er "region" eller "experience" (og "role", hvis serveren har det).
+    @GET("api/assessments/{id}/breakdown")
+    suspend fun getBreakdown(@Path("id") id: String, @Query("by") by: String): BreakdownDto
 
     // Sender en medarbejders svar. Backend'en svarer 204 (ingen indhold), når det lykkes.
     @POST("api/respondents/survey/submit")

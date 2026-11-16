@@ -46,3 +46,22 @@ data class AssessmentDetailsDto(
     val completedAt: List<String>,    // ét tidspunkt pr. besvarelse, ældste først
     val themes: List<ThemeScoreDto>   // tom, så længe for få har svaret
 )
+
+// Én gruppe i en nedbrydning (fx en region). En skjult gruppe har for få besvarelser:
+// så er n, adaScore og themes tomme, så ingen kan udpeges.
+data class BreakdownGroupDto(
+    val group: String,
+    val hidden: Boolean,
+    val n: Int?,
+    val adaScore: ScoreDto?,
+    val themes: List<ThemeScoreDto>
+)
+
+// Det, detaljeskærmen får til varmekortet: scoren pr. gruppe og tema
+data class BreakdownDto(
+    val assessmentId: String,
+    val groupBy: String,               // "region" eller "experience" (og "role", hvis serveren har det)
+    val availableBy: List<String>,     // de inddelinger, serveren kan lave
+    val minGroup: Int,                 // en gruppe med færre besvarelser end dette skjules
+    val groups: List<BreakdownGroupDto>
+)

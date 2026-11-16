@@ -14,13 +14,12 @@ object TokenStore {
     var token: String? = null
 }
 
-// Finder tokenet i svaret fra login. Jeg ved ikke præcis, hvordan svaret ser ud,
-// så den kan læse både { "token": "..." } (og lignende navne) og selve teksten.
+// Finder tokenet i svaret fra login
 fun extractToken(body: String): String? {
     val text = body.trim()
     if (text.isEmpty()) return null
 
-    // Svaret er selve tokenet (evt. med anførselstegn om)
+    // Svaret er selve tokenet
     if (!text.startsWith("{")) return text.trim('"')
 
     // Svaret er JSON: led efter et felt, der ligner et token
